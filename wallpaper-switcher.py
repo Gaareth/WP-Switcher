@@ -7,6 +7,7 @@ import time
 import subprocess
 import ctypes
 import importlib
+import argparse
 
 img_transition = importlib.import_module("image-transition")
 
@@ -19,6 +20,10 @@ class WallpaperSwitcher():
     def __init__(self, wallpaper_folder=r"C:\Users\Kirstein\Pictures\Hintergrundbilder", wait_time=10):
         self.WP_FOLDER = wallpaper_folder
         self.wait = wait_time
+        print("-------------Settings-------------")
+        print("Wallpaper folder:",wallpaper_folder)
+        print("Delay:",wait_time)
+        print("-------------Settings-------------\n")
 
     def get_desktop_environment(self):
         # From http://stackoverflow.com/questions/2035657/what-is-my-current-desktop-environment
@@ -261,6 +266,13 @@ class WallpaperSwitcher():
             self.current_wp = new_wallpaper
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-f", "--wp_folder", required=True,
+                    help="Folder of the Wallpapers")
 
-    wps = WallpaperSwitcher()
+    ap.add_argument("-d", "--delay",
+                    help="Delay until switch")
+    args = vars(ap.parse_args())
+
+    wps = WallpaperSwitcher(wallpaper_folder=args["wp_folder"], wait_time=args["delay"])
     wps.run()
