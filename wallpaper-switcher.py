@@ -17,12 +17,24 @@ class WallpaperSwitcher():
     recent_wp = defaultdict()
     current_wp = ""
 
-    def __init__(self, wallpaper_folder=r"C:\Users\Kirstein\Pictures\Hintergrundbilder", wait_time=10):
+    def __init__(self, wallpaper_folder=r"C:\Users\Kirstein\Pictures\Hintergrundbilder", wait_time=10, transition = True, fps_transition = 20, quality_transition = 100, num_of_images_transition = 20):
         self.WP_FOLDER = wallpaper_folder
         self.wait = wait_time
+
+        self.transition = transition
+        self.fps_trans = fps_transition
+        self.quality_tran = quality_transition
+        self.num_of_images_tran = num_of_images_transition
+
+
+
         print("-------------Settings-------------")
         print("Wallpaper folder:",wallpaper_folder)
         print("Delay:",wait_time)
+        print("Transition:",transition)
+        print("FPS:",fps_transition)
+        print("Quality:",quality_transition)
+        print("Transition Length:",num_of_images_transition)
         print("-------------Settings-------------\n")
 
     def get_desktop_environment(self):
@@ -243,16 +255,16 @@ class WallpaperSwitcher():
             if not os.path.exists(temp_dir):
                 os.mkdir(temp_dir)
 
-            if old_wallpaper != "":
+            if old_wallpaper != "" and self.transition:
                 try:
-                    itrans = img_transition.ImageTransition(input_image=old_wallpaper, output_image=new_wallpaper, temporary_dir=temp_dir, num_of_images=20, quality=100)
+                    itrans = img_transition.ImageTransition(input_image=old_wallpaper, output_image=new_wallpaper, temporary_dir=temp_dir, num_of_images=self.num_of_images_tran, quality=self.quality_tran)
                 except Exception as e:
                     sys.stderr.write(f"Error loading Image: {new_wallpaper} or {old_wallpaper}")
                     quit()#TODO: maybe some skip, need to make it properly then
 
                 time.sleep(self.wait)
 
-                for image_path in itrans.transition_brightness(fps=20):
+                for image_path in itrans.transition_brightness(fps=self.fps_trans):
                     self.set_wallpaper(image_path,False) #can safely assume set_wp works (i hope)
 
             else:
@@ -265,6 +277,17 @@ class WallpaperSwitcher():
             self.recent_wp[new_wallpaper] = time.time()
             self.current_wp = new_wallpaper
 
+
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        return False
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("-f", "--wp_folder", required=True,
@@ -272,7 +295,20 @@ if __name__ == "__main__":
 
     ap.add_argument("-d", "--delay",
                     help="Delay until switch")
+
+    ap.add_argument("-t","--transition",type=str2bool,
+                    help="Activates a transition between the wallpaper change")
+
+    ap.add_argument("--fps",
+                    help="Frames Per Second for the transition")
+
+    ap.add_argument("-q", "--quality",
+                    help="Quality of the transition images")
+
+    ap.add_argument("--len_transition",
+                    help="Number of images used for the transition")
+
     args = vars(ap.parse_args())
 
-    wps = WallpaperSwitcher(wallpaper_folder=args["wp_folder"], wait_time=args["delay"])
+    wps = WallpaperSwitcher(wallpaper_folder=args["wp_folder"], wait_time=args["delay"], transition=args["transition"], fps_transition=args["fps"], quality_transition=args["quality"], num_of_images_transition=args["len_transition"])
     wps.run()
