@@ -5,7 +5,6 @@ from PIL import Image
 import os
 import sys
 import numpy as np
-import cv2
 from multiprocessing import Pool, Value, Lock
 import atexit
 
@@ -100,7 +99,7 @@ class ImageTransition():
         if temp_img.mode in ("RGBA", "P"):
             temp_img = temp_img.convert("RGB")
 
-        temp_img.save(self.temp_dir+"\\{:02d}.jpg".format(counter), optimize=True, quality=self.quality)
+        temp_img.save(self.temp_dir+"/{:02d}.jpg".format(counter), optimize=True, quality=self.quality)
 
     def load(self):
         values = []
