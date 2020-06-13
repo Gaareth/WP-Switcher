@@ -317,13 +317,13 @@ if __name__ == "__main__":
     ap.add_argument("-d", "--delay",default=10,
                     help="Delay until switch")
 
-    ap.add_argument("-t","--transition",type=str2bool,defaul=True,
+    ap.add_argument("-t","--transition",type=str2bool,default=True,
                     help="Activates a transition between the wallpaper change")
 
-    ap.add_argument("--fps",defaul=20,
+    ap.add_argument("--fps",default=20,
                     help="Frames Per Second for the transition")
 
-    ap.add_argument("-q", "--quality",defaul=100,
+    ap.add_argument("-q", "--quality",default=100,
                     help="Quality of the transition images")
 
     ap.add_argument("--len_transition",default=20,
