@@ -249,7 +249,15 @@ class WallpaperSwitcher():
         self.recent_wp = {os.path.join(self.WP_FOLDER, filename): float("-inf") for filename in os.listdir(self.WP_FOLDER)}
 
     def load_wallpapers(self):
-        wallpapers = {os.path.join(self.WP_FOLDER, filename):self.recent_wp[os.path.join(self.WP_FOLDER, filename)] for filename in os.listdir(self.WP_FOLDER) if filename[-3:] in ["png", "jpg", "jpeg", "bmp"] }
+        try:
+            wallpapers = {os.path.join(self.WP_FOLDER, filename): self.recent_wp[os.path.join(self.WP_FOLDER, filename)]
+                          for filename in os.listdir(self.WP_FOLDER) if
+                          filename[-3:] in ["png", "jpg", "jpeg", "bmp", "jpg_large"]}
+        except:
+            # Occurs when a new image gets added during the execution
+            self.init_recent_wps()
+            return self.load_wallpapers()
+
         wallpapers = [x[0] for x in sorted(wallpapers.items(), key=lambda kv: kv[1], reverse=True)]
         return wallpapers
 
@@ -294,6 +302,7 @@ class WallpaperSwitcher():
                 if not ret:
                     sys.stderr.write("Critical Error: Shutting down")
                     quit()
+                time.sleep(self.wait)
 
             self.recent_wp[new_wallpaper] = time.time()
             self.current_wp = new_wallpaper
@@ -314,19 +323,19 @@ if __name__ == "__main__":
     ap.add_argument("-f", "--wp_folder", required=True,
                     help="Folder of the Wallpapers")
 
-    ap.add_argument("-d", "--delay",default=10,
+    ap.add_argument("-d", "--delay",default=10,type=int,
                     help="Delay until switch")
 
     ap.add_argument("-t","--transition",type=str2bool,default=True,
                     help="Activates a transition between the wallpaper change")
 
-    ap.add_argument("--fps",default=20,
+    ap.add_argument("--fps",default=20,type=int,
                     help="Frames Per Second for the transition")
 
-    ap.add_argument("-q", "--quality",default=100,
+    ap.add_argument("-q", "--quality",default=100,type=int,
                     help="Quality of the transition images")
 
-    ap.add_argument("--len_transition",default=20,
+    ap.add_argument("--len_transition",default=20,type=int,
                     help="Number of images used for the transition")
 
     args = vars(ap.parse_args())
