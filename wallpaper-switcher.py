@@ -8,6 +8,7 @@ import subprocess
 import ctypes
 import importlib
 import argparse
+import dbus
 
 img_transition = importlib.import_module("image-transition")
 
@@ -92,6 +93,23 @@ class WallpaperSwitcher():
                 return True
         return False
 
+    def set_wallpaper_kde(self, filepath):
+        plugin = 'org.kde.image'
+        jscript = """
+            var allDesktops = desktops();
+            print (allDesktops);
+            for (i=0;i<allDesktops.length;i++) {
+                d = allDesktops[i];
+                d.wallpaperPlugin = "%s";
+                d.currentConfigGroup = Array("Wallpaper", "%s", "General");
+                d.writeConfig("Image", "file://%s")
+            }
+            """
+        bus = dbus.SessionBus()
+        plasma = dbus.Interface(bus.get_object('org.kde.plasmashell', '/PlasmaShell'),
+                                dbus_interface='org.kde.PlasmaShell')
+        plasma.evaluateScript(jscript % (plugin, plugin, filepath))
+
     def set_wallpaper(self, file_loc, first_run):
         """ Code copied from: https://stackoverflow.com/a/21213504"""
 
@@ -131,6 +149,9 @@ class WallpaperSwitcher():
                 args = ["gconftool-2", "-t", "string", "--set", "/desktop/gnome/background/picture_filename",
                         '"%s"' % file_loc]
                 subprocess.Popen(args)
+
+            elif desktop_env == "kde":
+                self.set_wallpaper_kde(file_loc)
             ## KDE4 is difficult
             ## see http://blog.zx2c4.com/699 for a solution that might work
             elif desktop_env in ["kde3", "trinity"]:
@@ -251,7 +272,7 @@ class WallpaperSwitcher():
             old_wallpaper = self.current_wp
             new_wallpaper = self.choose_wallpaper()
 
-            temp_dir = os.path.expanduser("~")+"\\temp_img"
+            temp_dir = os.path.expanduser("~")+"/temp_img"
             if not os.path.exists(temp_dir):
                 os.mkdir(temp_dir)
 
@@ -293,19 +314,19 @@ if __name__ == "__main__":
     ap.add_argument("-f", "--wp_folder", required=True,
                     help="Folder of the Wallpapers")
 
-    ap.add_argument("-d", "--delay",
+    ap.add_argument("-d", "--delay",default=10,
                     help="Delay until switch")
 
-    ap.add_argument("-t","--transition",type=str2bool,
+    ap.add_argument("-t","--transition",type=str2bool,defaul=True,
                     help="Activates a transition between the wallpaper change")
 
-    ap.add_argument("--fps",
+    ap.add_argument("--fps",defaul=20,
                     help="Frames Per Second for the transition")
 
-    ap.add_argument("-q", "--quality",
+    ap.add_argument("-q", "--quality",defaul=100,
                     help="Quality of the transition images")
 
-    ap.add_argument("--len_transition",
+    ap.add_argument("--len_transition",default=20,
                     help="Number of images used for the transition")
 
     args = vars(ap.parse_args())
