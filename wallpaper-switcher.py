@@ -31,7 +31,6 @@ class WallpaperSwitcher():
         self.nsfw = nsfw
         self.recursive = recursive
 
-
         print("-------------Settings-------------")
         print("Wallpaper folder:",wallpaper_folder)
         print("Delay:",wait_time)
