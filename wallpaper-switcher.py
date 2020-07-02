@@ -9,6 +9,8 @@ import ctypes
 import importlib
 import argparse
 import dbus
+import traceback
+import cv2
 
 img_transition = importlib.import_module("image-transition")
 
@@ -18,7 +20,7 @@ class WallpaperSwitcher():
     recent_wp = defaultdict()
     current_wp = ""
 
-    def __init__(self, wallpaper_folder=r"C:\Users\Kirstein\Pictures\Hintergrundbilder", wait_time=10, transition = True, fps_transition = 20, quality_transition = 100, num_of_images_transition = 20):
+    def __init__(self, wallpaper_folder=os.path.join(os.path.expanduser("~"), "Pictures"), wait_time=120, transition=True, fps_transition=20, quality_transition=100, num_of_images_transition=20, nsfw=False, recursive=True):
         self.WP_FOLDER = wallpaper_folder
         self.wait = wait_time
 
@@ -26,12 +28,15 @@ class WallpaperSwitcher():
         self.fps_trans = fps_transition
         self.quality_tran = quality_transition
         self.num_of_images_tran = num_of_images_transition
-
+        self.nsfw = nsfw
+        self.recursive = recursive
 
 
         print("-------------Settings-------------")
         print("Wallpaper folder:",wallpaper_folder)
         print("Delay:",wait_time)
+        print("Recursive:",recursive)
+        print("NSFW:",nsfw)
         print("Transition:",transition)
         print("FPS:",fps_transition)
         print("Quality:",quality_transition)
@@ -39,6 +44,7 @@ class WallpaperSwitcher():
         print("-------------Settings-------------\n")
 
     def get_desktop_environment(self):
+        """Code copied from: https://stackoverflow.com/a/21213358"""
         # From http://stackoverflow.com/questions/2035657/what-is-my-current-desktop-environment
         # and http://ubuntuforums.org/showthread.php?t=652320
         # and http://ubuntuforums.org/showthread.php?t=652320
@@ -82,6 +88,7 @@ class WallpaperSwitcher():
         return "unknown"
 
     def is_running(self, process):
+        """Code copied from: https://stackoverflow.com/a/21213358"""
         # From http://www.bloggerpolis.com/2011/05/how-to-check-if-a-process-is-running-using-python/
         # and http://richarddingwall.name/2009/06/18/windows-equivalents-of-ps-and-kill-commands/
         try:  # Linux/Unix
@@ -111,7 +118,7 @@ class WallpaperSwitcher():
         plasma.evaluateScript(jscript % (plugin, plugin, filepath))
 
     def set_wallpaper(self, file_loc, first_run):
-        """ Code copied from: https://stackoverflow.com/a/21213504"""
+        """ 99% Code copied from: https://stackoverflow.com/a/21213504"""
 
         # Note: There are two common Linux desktop environments where
         # I have not been able to set the desktop background from
@@ -119,9 +126,9 @@ class WallpaperSwitcher():
         desktop_env = self.get_desktop_environment()
         file_loc = os.path.normpath(file_loc)
 
-        if first_run:
-            print(f"Desktop Environment: {desktop_env}")
-            print(f"Wallpaper: {file_loc}")
+        #if first_run:
+            #print(f"Desktop Environment: {desktop_env}")
+            #print(f"Wallpaper: {file_loc}")
 
         try:
             if desktop_env in ["gnome", "unity", "cinnamon"]:
@@ -236,6 +243,7 @@ class WallpaperSwitcher():
             return False
 
     def get_home_dir(self):
+        """ Code copied from: https://stackoverflow.com/a/21213504"""
         if sys.platform == "cygwin":
             home_dir = os.getenv('HOME')
         else:
@@ -246,20 +254,35 @@ class WallpaperSwitcher():
             raise KeyError("Neither USERPROFILE or HOME environment variables set.")
 
     def init_recent_wps(self):
-        self.recent_wp = {os.path.join(self.WP_FOLDER, filename): float("-inf") for filename in os.listdir(self.WP_FOLDER)}
+        if self.recursive:
+            all_wallpapers = [os.path.join(dp, f) for dp, dn, fn in os.walk(self.WP_FOLDER) for f in fn if
+                            f[-3:] in ["png", "jpg", "jpeg", "bmp", "jpg_large"] and not (not self.nsfw and "NSFW" in dp)]
+        else:
+            all_wallpapers = {os.path.join(self.WP_FOLDER, filename) for filename in os.listdir(self.WP_FOLDER) if filename[-3:] in ["png", "jpg", "jpeg", "bmp", "jpg_large"]}
+
+        self.recent_wp = {file: float("-inf") for file in all_wallpapers}
 
     def load_wallpapers(self):
         try:
-            wallpapers = {os.path.join(self.WP_FOLDER, filename): self.recent_wp[os.path.join(self.WP_FOLDER, filename)]
-                          for filename in os.listdir(self.WP_FOLDER) if
-                          filename[-3:] in ["png", "jpg", "jpeg", "bmp", "jpg_large"]}
-        except:
+            if self.recursive:
+                all_wallpapers = [os.path.join(dp, f) for dp, dn, fn in os.walk(self.WP_FOLDER) for f in fn if f[-3:] in ["png", "jpg", "jpeg", "bmp", "jpg_large"] and not (not self.nsfw and "NSFW" in dp)]
+            else:
+                all_wallpapers = {os.path.join(self.WP_FOLDER, filename): self.recent_wp[os.path.join(self.WP_FOLDER, filename)] for filename in os.listdir(self.WP_FOLDER) if filename[-3:] in ["png", "jpg", "jpeg", "bmp", "jpg_large"]}
+
+            print(f"> Loaded: {len(all_wallpapers)} Wallpapers")
+            wallpapers = {filepath:self.recent_wp[filepath] for filepath in all_wallpapers}
+        except KeyError:
+            #might produce endless loop
+            traceback.print_exc()
             # Occurs when a new image gets added during the execution
             self.init_recent_wps()
             return self.load_wallpapers()
 
         wallpapers = [x[0] for x in sorted(wallpapers.items(), key=lambda kv: kv[1], reverse=True)]
         return wallpapers
+
+    def get_duplicates(self, input_list, element):
+        return sum([1 for item in input_list if element == item])
 
     def choose_wallpaper(self):
         wp = self.load_wallpapers()
@@ -269,7 +292,10 @@ class WallpaperSwitcher():
             distributed_wps.extend([w]*(wp.index(w)+1))
 
         random_wp = random.choice(distributed_wps)
-        print(f"Random Wallpaper: {random_wp}")
+        height, width, _ = cv2.imread(random_wp).shape
+        chance = (self.get_duplicates(distributed_wps, random_wp) / len(distributed_wps)) * 100
+
+        print(f"Random Wallpaper: {random_wp} [{width}x{height}] Chance: {chance:.2f}% : {self.get_duplicates(distributed_wps, random_wp)} / {len(distributed_wps)}")
 
         return random_wp
 
@@ -324,7 +350,7 @@ if __name__ == "__main__":
                     help="Folder of the Wallpapers")
 
     ap.add_argument("-d", "--delay",default=10,type=int,
-                    help="Delay until switch")
+                    help="Delay in seconds until wallpaper switch")
 
     ap.add_argument("-t","--transition",type=str2bool,default=True,
                     help="Activates a transition between the wallpaper change")
@@ -338,7 +364,13 @@ if __name__ == "__main__":
     ap.add_argument("--len_transition",default=20,type=int,
                     help="Number of images used for the transition")
 
+    ap.add_argument("-nsfw", "--NSFW", default=False, type=str2bool,
+                    help="Not Safe For Work (NSFW) images")
+
+    ap.add_argument("-r", "--recursive", default=True, type=str2bool,
+                    help="Recursively choosing images (from all sub folders)")
+
     args = vars(ap.parse_args())
 
-    wps = WallpaperSwitcher(wallpaper_folder=args["wp_folder"], wait_time=args["delay"], transition=args["transition"], fps_transition=args["fps"], quality_transition=args["quality"], num_of_images_transition=args["len_transition"])
+    wps = WallpaperSwitcher(wallpaper_folder=args["wp_folder"], wait_time=args["delay"], transition=args["transition"], fps_transition=args["fps"], quality_transition=args["quality"], num_of_images_transition=args["len_transition"], nsfw=args["NSFW"], recursive = args["recursive"])
     wps.run()
