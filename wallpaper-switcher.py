@@ -44,7 +44,7 @@ class WallpaperSwitcher():
         print("-------------Settings-------------\n")
 
     def get_desktop_environment(self):
-        """Code copied from: https://stackoverflow.com/a/21213358"""
+        """Code copied from: https://stackoverflow.com/a/21213358."""
         # From http://stackoverflow.com/questions/2035657/what-is-my-current-desktop-environment
         # and http://ubuntuforums.org/showthread.php?t=652320
         # and http://ubuntuforums.org/showthread.php?t=652320
@@ -88,7 +88,7 @@ class WallpaperSwitcher():
         return "unknown"
 
     def is_running(self, process):
-        """Code copied from: https://stackoverflow.com/a/21213358"""
+        """Code copied from: https://stackoverflow.com/a/21213358."""
         # From http://www.bloggerpolis.com/2011/05/how-to-check-if-a-process-is-running-using-python/
         # and http://richarddingwall.name/2009/06/18/windows-equivalents-of-ps-and-kill-commands/
         try:  # Linux/Unix
@@ -118,11 +118,10 @@ class WallpaperSwitcher():
         plasma.evaluateScript(jscript % (plugin, plugin, filepath))
 
     def set_wallpaper(self, file_loc, first_run):
-        """ 99% Code copied from: https://stackoverflow.com/a/21213504"""
-
+        """99% Code copied from: https://stackoverflow.com/a/21213504."""
         # Note: There are two common Linux desktop environments where
         # I have not been able to set the desktop background from
-        # command line: KDE, Enlightenment
+        # command line: KDE, Enlightenment [KDE FIXED]
         desktop_env = self.get_desktop_environment()
         file_loc = os.path.normpath(file_loc)
 
@@ -243,7 +242,7 @@ class WallpaperSwitcher():
             return False
 
     def get_home_dir(self):
-        """ Code copied from: https://stackoverflow.com/a/21213504"""
+        """Code copied from: https://stackoverflow.com/a/21213504."""
         if sys.platform == "cygwin":
             home_dir = os.getenv('HOME')
         else:
@@ -281,9 +280,6 @@ class WallpaperSwitcher():
         wallpapers = [x[0] for x in sorted(wallpapers.items(), key=lambda kv: kv[1], reverse=True)]
         return wallpapers
 
-    def get_duplicates(self, input_list, element):
-        return sum([1 for item in input_list if element == item])
-
     def choose_wallpaper(self):
         wp = self.load_wallpapers()
 
@@ -293,14 +289,17 @@ class WallpaperSwitcher():
 
         random_wp = random.choice(distributed_wps)
         height, width, _ = cv2.imread(random_wp).shape
-        chance = (self.get_duplicates(distributed_wps, random_wp) / len(distributed_wps)) * 100
+        duplicates = sum([1 for item in distributed_wps if random_wp == item])
+        chance = (duplicates/ len(distributed_wps)) * 100
 
-        print(f"Random Wallpaper: {random_wp} [{width}x{height}] Chance: {chance:.2f}% : {self.get_duplicates(distributed_wps, random_wp)} / {len(distributed_wps)}")
+        print(f"Random Wallpaper: {random_wp} [{width}x{height}] Chance: {chance:.2f}% : {duplicates} / {len(distributed_wps)}")
 
         return random_wp
 
     def run(self):
         self.init_recent_wps()
+
+        print(f"Desktop Environment: {self.get_desktop_environment()}")
 
         while True:
             old_wallpaper = self.current_wp
@@ -313,7 +312,7 @@ class WallpaperSwitcher():
             if old_wallpaper != "" and self.transition:
                 try:
                     itrans = img_transition.ImageTransition(input_image=old_wallpaper, output_image=new_wallpaper, temporary_dir=temp_dir, num_of_images=self.num_of_images_tran, quality=self.quality_tran)
-                except Exception as e:
+                except IOError:
                     sys.stderr.write(f"Error loading Image: {new_wallpaper} or {old_wallpaper}")
                     quit()#TODO: maybe some skip, need to make it properly then
 

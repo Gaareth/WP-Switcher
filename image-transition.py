@@ -1,14 +1,12 @@
 import ctypes
 import time
 from PIL import Image, ImageEnhance
-from PIL import Image
 import os
-import sys
-import numpy as np
-from multiprocessing import Pool, Value, Lock
+from multiprocessing import Pool
 import atexit
 
-class ImageTransition():
+
+class ImageTransition:
 
     def __init__(self, input_image, output_image, temporary_dir, debug=True, quality=40, num_of_images=15, direct_wp=False):
         self.image1 = input_image
@@ -32,7 +30,7 @@ class ImageTransition():
             Image.open(self.image1)
             Image.open(self.image2)
         except:
-            raise Exception("Error loading file")
+            raise IOError("Error loading file")
 
     def setwp(self, img):#works only for windows
         ctypes.windll.user32.SystemParametersInfoW(20, 0, img, 0)
@@ -53,12 +51,11 @@ class ImageTransition():
                     time.sleep(2)
                     os.remove(os.path.join(self.temp_dir, filename))
 
-
     def transition_brightness(self, fps=25):
         print("> Transition")
         for filename in sorted(os.listdir(self.temp_dir), key=lambda x: int(os.path.splitext(x)[0])):
-            type = filename[-3:]
-            if type in ["png", "jpg"]:
+            file_type = filename[-3:]
+            if file_type in ["png", "jpg"]:
                 #print(filename)
                 time.sleep(1 / fps)
                 if self.direct_wp:
@@ -88,9 +85,8 @@ class ImageTransition():
         else:
             value = round(1 - (work_data[1] * (1 / self.num_of_images)), 2)
 
-
         temp_img = Image.open(work_data[0])
-        #temp_img.thumbnail([1280, 720], Image.ANTIALIAS)  # resize for better performace
+        # temp_img.thumbnail([1280, 720], Image.ANTIALIAS)  # resize for better performace
         temp_img.thumbnail([1920, 1080], Image.ANTIALIAS)
 
         temp_img = self.change_brightness(temp_img, value=value)
@@ -118,17 +114,3 @@ class ImageTransition():
         self.printDebug("> Generated temporary images")
 
 
-
-if __name__ == "__main__":
-    image1 = r"C:\Users\Kirstein\Pictures\Hintergrundbilder\background-beautiful-blossom-268533.jpg"
-    image2 = r"C:\Users\Kirstein\Pictures\Hintergrundbilder\67572-blaue-schoene-hintergrundbilder-1920x1080-fuer-hd.jpg"
-    temp_dir = r"C:\Users\Kirstein\Desktop\Coding\python\Workspace\python2\wallpaper-switcher\img"
-
-    itrans = ImageTransition(input_image=image1,output_image=image2, temporary_dir=temp_dir)
-
-    for _ in itrans.transition_brightness(fps=15):
-        print(_)
-
-
-#time.sleep(5)
-#clean_dir("")
