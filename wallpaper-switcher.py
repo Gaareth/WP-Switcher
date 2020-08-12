@@ -12,10 +12,15 @@ import dbus
 import traceback
 import cv2
 
+
+import sys
+import select
+
+
 img_transition = importlib.import_module("image-transition")
 
 
-class WallpaperSwitcher():
+class WallpaperSwitcher:
 
     recent_wp = defaultdict()
     current_wp = ""
@@ -295,6 +300,18 @@ class WallpaperSwitcher():
 
         return random_wp
 
+    def sleep(self):
+        # only linux afaik
+        while sys.stdin in select.select([sys.stdin], [], [], self.wait)[0]:
+            line = sys.stdin.readline()
+            if line:
+                if line == "\n":
+                    return
+            else:  # an empty line means stdin has been closed
+                print('eof')
+                exit(0)
+
+
     def run(self):
         self.init_recent_wps()
 
@@ -304,7 +321,7 @@ class WallpaperSwitcher():
             old_wallpaper = self.current_wp
             new_wallpaper = self.choose_wallpaper()
 
-            temp_dir = os.path.expanduser("~")+"/temp_img"
+            temp_dir = os.path.join(os.path.expanduser("~"), "temp_img")
             if not os.path.exists(temp_dir):
                 os.mkdir(temp_dir)
 
@@ -322,11 +339,11 @@ class WallpaperSwitcher():
 
             else:
                 ret = self.set_wallpaper(new_wallpaper, True)
-
                 if not ret:
                     sys.stderr.write("Critical Error: Shutting down")
                     quit()
-                time.sleep(self.wait)
+
+                self.sleep()
 
             self.recent_wp[new_wallpaper] = time.time()
             self.current_wp = new_wallpaper
