@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import platform
 from collections import defaultdict
 import random
 import time
@@ -8,7 +9,10 @@ import subprocess
 import ctypes
 import importlib
 import argparse
-import dbus
+
+if platform.system() == "Linux":
+    import dbus
+
 import traceback
 import cv2
 
@@ -302,15 +306,17 @@ class WallpaperSwitcher:
 
     def sleep(self):
         # only linux afaik
-        while sys.stdin in select.select([sys.stdin], [], [], self.wait)[0]:
-            line = sys.stdin.readline()
-            if line:
-                if line == "\n":
-                    return
-            else:  # an empty line means stdin has been closed
-                print('eof')
-                exit(0)
-
+        if platform.system() == "Linux":
+            while sys.stdin in select.select([sys.stdin], [], [], self.wait)[0]:                                                    
+                line = sys.stdin.readline()
+                if line:
+                    if line == "\n":
+                        return
+                else:  # an empty line means stdin has been closed
+                    print('eof')
+                    exit(0)
+        else:
+            time.sleep(self.wait)
 
     def run(self):
         self.init_recent_wps()
