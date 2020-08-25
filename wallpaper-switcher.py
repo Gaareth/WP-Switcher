@@ -382,7 +382,7 @@ if __name__ == "__main__":
     ap.add_argument("-d", "--delay",default=10,type=int,
                     help="Delay in seconds until wallpaper switch")
 
-    ap.add_argument("-t","--transition",type=str2bool,default=True,
+    ap.add_argument("-t","--transition",type=str2bool,default=False,
                     help="Activates a transition between the wallpaper change")
 
     ap.add_argument("--fps",default=20,type=int,
