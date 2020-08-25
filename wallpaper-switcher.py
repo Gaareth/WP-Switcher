@@ -29,7 +29,9 @@ class WallpaperSwitcher:
     recent_wp = defaultdict()
     current_wp = ""
 
-    def __init__(self, wallpaper_folder=os.path.join(os.path.expanduser("~"), "Pictures"), wait_time=120, transition=True, fps_transition=20, quality_transition=100, num_of_images_transition=20, nsfw=False, recursive=True):
+    def __init__(self, wallpaper_folder=os.path.join(os.path.expanduser("~"), "Pictures"), wait_time=120, transition=True, 
+                        fps_transition=20, quality_transition=100, num_of_images_transition=20, nsfw=False, 
+                        recursive=True, supported_images=[".png", ".jpg", ".jpeg", ".bmp", ".jpg_large", ".webp"]):
         self.WP_FOLDER = wallpaper_folder
         self.wait = wait_time
 
@@ -39,6 +41,7 @@ class WallpaperSwitcher:
         self.num_of_images_tran = num_of_images_transition
         self.nsfw = nsfw
         self.recursive = recursive
+        self.supported_images = supported_images
 
         print("-------------Settings-------------")
         print("Wallpaper folder:",wallpaper_folder)
@@ -49,6 +52,7 @@ class WallpaperSwitcher:
         print("FPS:",fps_transition)
         print("Quality:",quality_transition)
         print("Transition Length:",num_of_images_transition)
+        print("Supported Images:", supported_images)
         print("-------------Settings-------------\n")
 
     def get_desktop_environment(self):
@@ -261,39 +265,44 @@ class WallpaperSwitcher:
             raise KeyError("Neither USERPROFILE or HOME environment variables set.")
 
     def init_recent_wps(self):
-        if self.recursive:
-            all_wallpapers = [os.path.join(dp, f) for dp, dn, fn in os.walk(self.WP_FOLDER) for f in fn if
-                            f[-3:] in ["png", "jpg", "jpeg", "bmp", "jpg_large"] and not (not self.nsfw and "NSFW" in dp)]
-        else:
-            all_wallpapers = {os.path.join(self.WP_FOLDER, filename) for filename in os.listdir(self.WP_FOLDER) if filename[-3:] in ["png", "jpg", "jpeg", "bmp", "jpg_large"]}
-
-        self.recent_wp = {file: float("-inf") for file in all_wallpapers}
+        self.recent_wp = {file: float("-inf") for file in self.load_wallpapers()}
 
     def load_wallpapers(self):
-        try:
-            if self.recursive:
-                all_wallpapers = [os.path.join(dp, f) for dp, dn, fn in os.walk(self.WP_FOLDER) for f in fn if f[-3:] in ["png", "jpg", "jpeg", "bmp", "jpg_large"] and not (not self.nsfw and "NSFW" in dp)]
-            else:
-                all_wallpapers = {os.path.join(self.WP_FOLDER, filename): self.recent_wp[os.path.join(self.WP_FOLDER, filename)] for filename in os.listdir(self.WP_FOLDER) if filename[-3:] in ["png", "jpg", "jpeg", "bmp", "jpg_large"]}
+        if self.recursive:
+            all_wallpapers = [os.path.join(dp, f) for dp, dn, fn in os.walk(self.WP_FOLDER) for f in fn 
+                        if (os.path.splitext(f)[1] in self.supported_images or not len(self.supported_images))
+                        and not (not self.nsfw and "NSFW" in dp)]
+        else:
+            all_wallpapers = {os.path.join(self.WP_FOLDER, filename) for filename in os.listdir(self.WP_FOLDER) 
+                        if (os.path.splitext(filename)[1] in self.supported_images or not len(self.supported_images))}
+        return all_wallpapers
 
-            print(f"> Loaded: {len(all_wallpapers)} Wallpapers")
-            wallpapers = {filepath:self.recent_wp[filepath] for filepath in all_wallpapers}
+    def sort_wallpapers(self):
+        try:
+            loaded_wallpapers = self.load_wallpapers()
+            print(f"> Loaded: {len(loaded_wallpapers)} Wallpapers")
+            wallpapers = {filepath:self.recent_wp[filepath] for filepath in loaded_wallpapers}
         except KeyError:
             #might produce endless loop
             traceback.print_exc()
             # Occurs when a new image gets added during the execution
             self.init_recent_wps()
-            return self.load_wallpapers()
+            return self.sort_wallpapers()
+        
 
+        # Items with lower values are in the back
+        # A lower value means an item which was picked more time ago => Last Item was picked the longste time ago
         wallpapers = [x[0] for x in sorted(wallpapers.items(), key=lambda kv: kv[1], reverse=True)]
         return wallpapers
 
     def choose_wallpaper(self):
-        wp = self.load_wallpapers()
+        wp = self.sort_wallpapers()
 
         distributed_wps = []
         for w in wp:
-            distributed_wps.extend([w]*(wp.index(w)+1))
+            distributed_wps.extend([w]*(wp.index(w)+1)) # Adds item to list depending on its frequency in the wallpapers
+        
+        # Due to the sorting lower values are more likely to be picked
 
         random_wp = random.choice(distributed_wps)
         height, width, _ = cv2.imread(random_wp).shape
@@ -391,7 +400,12 @@ if __name__ == "__main__":
     ap.add_argument("-r", "--recursive", default=True, type=str2bool,
                     help="Recursively choosing images (from all sub folders)")
 
-    args = vars(ap.parse_args())
+    ap.add_argument("-a", "--allowed_ext", default=[".png", ".jpg", ".jpeg", ".bmp", ".jpg_large", ".webp"], nargs="*", 
+                    help="Allowed Image extensions specified like thia: '.png', '.jpg'.. . No/Empty means all extensions")
 
-    wps = WallpaperSwitcher(wallpaper_folder=args["wp_folder"], wait_time=args["delay"], transition=args["transition"], fps_transition=args["fps"], quality_transition=args["quality"], num_of_images_transition=args["len_transition"], nsfw=args["NSFW"], recursive = args["recursive"])
+
+
+    args = vars(ap.parse_args())
+    wps = WallpaperSwitcher(wallpaper_folder=args["wp_folder"], wait_time=args["delay"], transition=args["transition"], fps_transition=args["fps"], 
+    quality_transition=args["quality"], num_of_images_transition=args["len_transition"], nsfw=args["NSFW"], recursive = args["recursive"], supported_images = args["allowed_ext"])
     wps.run()
