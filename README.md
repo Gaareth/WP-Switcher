@@ -23,7 +23,7 @@ Argument | Description
 --len_transition LEN_TRANSITION| Number of images used for the transition
 
 ## Settings
-Recommended settings for the transition are FPS:15-20 Quality: 30-75
+Recommended settings for the transition are FPS:15-20 Quality: 30-75 <br>
 Also for most images you can either have a more smooth animation or a decent quality. Trying both will probably end in big lags.
 
 
