@@ -1,11 +1,11 @@
 # WP-Switcher
-Crossplattform Wallpaper Switcher
+Crossplattform Wallpaper Switcher including a transition
 
 ## Installation
 
 * Python3 needs to be installed
 * Install the dependencies: `pip install -r requirements.txt`
-
+* Note: you don't have to install opencv_python if it does not work for you because it's only needed for the transition.
 ## Usage
 
 ### Basic Usage
