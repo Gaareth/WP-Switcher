@@ -1,18 +1,11 @@
 import os
-import re
-import sys
-import platform
+import threading
 from collections import defaultdict
 import random
 import time
-import subprocess
-import ctypes
 import importlib
 import argparse
-
-if platform.system() == "Linux":
-    import dbus
-
+import signal
 import traceback
 import cv2
 
@@ -20,7 +13,8 @@ import cv2
 import sys
 import select
 
-
+import wallpaper_helper
+                        
 img_transition = importlib.import_module("image-transition")
 
 
@@ -28,7 +22,8 @@ class WallpaperSwitcher:
 
     recent_wp = defaultdict()
     current_wp = ""
-
+    should_sleep = True
+    
     def __init__(self, wallpaper_folder=os.path.join(os.path.expanduser("~"), "Pictures"), wait_time=120, transition=True, 
                         fps_transition=20, quality_transition=100, num_of_images_transition=20, nsfw=False, 
                         recursive=True, supported_images=[".png", ".jpg", ".jpeg", ".bmp", ".jpg_large", ".webp"]):
@@ -44,225 +39,17 @@ class WallpaperSwitcher:
         self.supported_images = supported_images
 
         print("-------------Settings-------------")
-        print("Wallpaper folder:",wallpaper_folder)
-        print("Delay:",wait_time)
-        print("Recursive:",recursive)
-        print("NSFW:",nsfw)
-        print("Transition:",transition)
-        print("FPS:",fps_transition)
-        print("Quality:",quality_transition)
-        print("Transition Length:",num_of_images_transition)
+        print("Wallpaper folder:", wallpaper_folder)
+        print("Delay:", wait_time)
+        print("Recursive:", recursive)
+        print("NSFW:", nsfw)
+        print("Transition:", transition)
+        print("FPS:", fps_transition)
+        print("Quality:", quality_transition)
+        print("Transition Length:", num_of_images_transition)
         print("Supported Images:", supported_images)
         print("-------------Settings-------------\n")
 
-    def get_desktop_environment(self):
-        """Code copied from: https://stackoverflow.com/a/21213358."""
-        # From http://stackoverflow.com/questions/2035657/what-is-my-current-desktop-environment
-        # and http://ubuntuforums.org/showthread.php?t=652320
-        # and http://ubuntuforums.org/showthread.php?t=652320
-        # and http://ubuntuforums.org/showthread.php?t=1139057
-        if sys.platform in ["win32", "cygwin"]:
-            return "windows"
-        elif sys.platform == "darwin":
-            return "mac"
-        else:  # Most likely either a POSIX system or something not much common
-            desktop_session = os.environ.get("DESKTOP_SESSION")
-            if desktop_session is not None:  # easier to match if we doesn't have  to deal with caracter cases
-                desktop_session = desktop_session.lower()
-                if desktop_session in ["gnome", "unity", "cinnamon", "mate", "xfce4", "lxde", "fluxbox",
-                                       "blackbox", "openbox", "icewm", "jwm", "afterstep", "trinity", "kde"]:
-                    return desktop_session
-                ## Special cases ##
-                # Canonical sets $DESKTOP_SESSION to Lubuntu rather than LXDE if using LXDE.
-                # There is no guarantee that they will not do the same with the other desktop environments.
-                elif "xfce" in desktop_session or desktop_session.startswith("xubuntu"):
-                    return "xfce4"
-                elif desktop_session.startswith("ubuntu"):
-                    return "unity"
-                elif desktop_session.startswith("lubuntu"):
-                    return "lxde"
-                elif desktop_session.startswith("kubuntu"):
-                    return "kde"
-                elif desktop_session.startswith("razor"):  # e.g. razorkwin
-                    return "razor-qt"
-                elif desktop_session.startswith("wmaker"):  # e.g. wmaker-common
-                    return "windowmaker"
-            if os.environ.get('KDE_FULL_SESSION') == 'true':
-                return "kde"
-            elif os.environ.get('GNOME_DESKTOP_SESSION_ID'):
-                if not "deprecated" in os.environ.get('GNOME_DESKTOP_SESSION_ID'):
-                    return "gnome2"
-            # From http://ubuntuforums.org/showthread.php?t=652320
-            elif self.is_running("xfce-mcs-manage"):
-                return "xfce4"
-            elif self.is_running("ksmserver"):
-                return "kde"
-        return "unknown"
-
-    def is_running(self, process):
-        """Code copied from: https://stackoverflow.com/a/21213358."""
-        # From http://www.bloggerpolis.com/2011/05/how-to-check-if-a-process-is-running-using-python/
-        # and http://richarddingwall.name/2009/06/18/windows-equivalents-of-ps-and-kill-commands/
-        try:  # Linux/Unix
-            s = subprocess.Popen(["ps", "axw"], stdout=subprocess.PIPE)
-        except:  # Windows
-            s = subprocess.Popen(["tasklist", "/v"], stdout=subprocess.PIPE)
-        for x in s.stdout:
-            if re.search(process, x):
-                return True
-        return False
-
-    def set_wallpaper_kde(self, filepath):
-        plugin = 'org.kde.image'
-        jscript = """
-            var allDesktops = desktops();
-            print (allDesktops);
-            for (i=0;i<allDesktops.length;i++) {
-                d = allDesktops[i];
-                d.wallpaperPlugin = "%s";
-                d.currentConfigGroup = Array("Wallpaper", "%s", "General");
-                d.writeConfig("Image", "file://%s")
-            }
-            """
-        bus = dbus.SessionBus()
-        plasma = dbus.Interface(bus.get_object('org.kde.plasmashell', '/PlasmaShell'),
-                                dbus_interface='org.kde.PlasmaShell')
-        plasma.evaluateScript(jscript % (plugin, plugin, filepath))
-
-    def set_wallpaper(self, file_loc, first_run):
-        """99% Code copied from: https://stackoverflow.com/a/21213504."""
-        # Note: There are two common Linux desktop environments where
-        # I have not been able to set the desktop background from
-        # command line: KDE, Enlightenment [KDE FIXED]
-        desktop_env = self.get_desktop_environment()
-        file_loc = os.path.normpath(file_loc)
-
-        #if first_run:
-            #print(f"Desktop Environment: {desktop_env}")
-            #print(f"Wallpaper: {file_loc}")
-
-        try:
-            if desktop_env in ["gnome", "unity", "cinnamon"]:
-                uri = "'file://%s'" % file_loc
-                try:
-                    SCHEMA = "org.gnome.desktop.background"
-                    KEY = "picture-uri"
-                    gsettings = Gio.Settings.new(SCHEMA)
-                    gsettings.set_string(KEY, uri)
-                except:
-                    args = ["gsettings", "set", "org.gnome.desktop.background", "picture-uri", uri]
-                    subprocess.Popen(args)
-            elif desktop_env == "mate":
-                try:  # MATE >= 1.6
-                    # info from http://wiki.mate-desktop.org/docs:gsettings
-                    args = ["gsettings", "set", "org.mate.background", "picture-filename", "'%s'" % file_loc]
-                    subprocess.Popen(args)
-                except:  # MATE < 1.6
-                    # From https://bugs.launchpad.net/variety/+bug/1033918
-                    args = ["mateconftool-2", "-t", "string", "--set", "/desktop/mate/background/picture_filename",
-                            '"%s"' % file_loc]
-                    subprocess.Popen(args)
-            elif desktop_env == "gnome2":  # Not tested
-                # From https://bugs.launchpad.net/variety/+bug/1033918
-                args = ["gconftool-2", "-t", "string", "--set", "/desktop/gnome/background/picture_filename",
-                        '"%s"' % file_loc]
-                subprocess.Popen(args)
-
-            elif desktop_env == "kde":
-                self.set_wallpaper_kde(file_loc)
-            ## KDE4 is difficult
-            ## see http://blog.zx2c4.com/699 for a solution that might work
-            elif desktop_env in ["kde3", "trinity"]:
-                # From http://ubuntuforums.org/archive/index.php/t-803417.html
-                args = 'dcop kdesktop KBackgroundIface setWallpaper 0 "%s" 6' % file_loc
-                subprocess.Popen(args, shell=True)
-            elif desktop_env == "xfce4":
-                # From http://www.commandlinefu.com/commands/view/2055/change-wallpaper-for-xfce4-4.6.0
-                if first_run:
-                    args0 = ["xfconf-query", "-c", "xfce4-desktop", "-p", "/backdrop/screen0/monitor0/image-path", "-s",
-                             file_loc]
-                    args1 = ["xfconf-query", "-c", "xfce4-desktop", "-p", "/backdrop/screen0/monitor0/image-style",
-                             "-s",
-                             "3"]
-                    args2 = ["xfconf-query", "-c", "xfce4-desktop", "-p", "/backdrop/screen0/monitor0/image-show", "-s",
-                             "true"]
-                    subprocess.Popen(args0)
-                    subprocess.Popen(args1)
-                    subprocess.Popen(args2)
-                args = ["xfdesktop", "--reload"]
-                subprocess.Popen(args)
-
-            elif desktop_env in ["fluxbox", "jwm", "openbox", "afterstep"]:
-                # http://fluxbox-wiki.org/index.php/Howto_set_the_background
-                # used fbsetbg on jwm too since I am too lazy to edit the XML configuration
-                # now where fbsetbg does the job excellent anyway.
-                # and I have not figured out how else it can be set on Openbox and AfterSTep
-                # but fbsetbg works excellent here too.
-                try:
-                    args = ["fbsetbg", file_loc]
-                    subprocess.Popen(args)
-                except:
-                    sys.stderr.write("ERROR: Failed to set wallpaper with fbsetbg!\n")
-                    sys.stderr.write("Please make sre that You have fbsetbg installed.\n")
-            elif desktop_env == "icewm":
-                # command found at http://urukrama.wordpress.com/2007/12/05/desktop-backgrounds-in-window-managers/
-                args = ["icewmbg", file_loc]
-                subprocess.Popen(args)
-            elif desktop_env == "blackbox":
-                # command found at http://blackboxwm.sourceforge.net/BlackboxDocumentation/BlackboxBackground
-                args = ["bsetbg", "-full", file_loc]
-                subprocess.Popen(args)
-            elif desktop_env == "lxde":
-                args = "pcmanfm --set-wallpaper %s --wallpaper-mode=scaled" % file_loc
-                subprocess.Popen(args, shell=True)
-            elif desktop_env == "windowmaker":
-                # From http://www.commandlinefu.com/commands/view/3857/set-wallpaper-on-windowmaker-in-one-line
-                args = "wmsetbg -s -u %s" % file_loc
-                subprocess.Popen(args, shell=True)
-            ## NOT TESTED BELOW - don't want to mess things up ##
-            # elif desktop_env=="enlightenment": # I have not been able to make it work on e17. On e16 it would have been something in this direction
-            #    args = "enlightenment_remote -desktop-bg-add 0 0 0 0 %s" % file_loc
-            #    subprocess.Popen(args,shell=True)
-            # elif desktop_env=="windows": #Not tested since I do not run this on Windows
-            #    #From https://stackoverflow.com/questions/1977694/change-desktop-background
-            #    import ctypes
-            #    SPI_SETDESKWALLPAPER = 20
-            #    ctypes.windll.user32.SystemParametersInfoA(SPI_SETDESKWALLPAPER, 0, file_loc , 0)
-            # elif desktop_env=="mac": #Not tested since I do not have a mac
-            #    #From https://stackoverflow.com/questions/431205/how-can-i-programatically-change-the-background-in-mac-os-x
-            #    try:
-            #        from appscript import app, mactypes
-            #        app('Finder').desktop_picture.set(mactypes.File(file_loc))
-            #    except ImportError:
-            #        #import subprocess
-            #        SCRIPT = """/usr/bin/osascript<<END
-            #        tell application "Finder" to
-            #        set desktop picture to POSIX file "%s"
-            #        end tell
-            #        END"""
-            #        subprocess.Popen(SCRIPT%file_loc, shell=True)
-            elif desktop_env in ["windows"]:
-                ctypes.windll.user32.SystemParametersInfoW(20, 0, file_loc, 0)
-            else:
-                if first_run:  # don't spam the user with the same message over and over again
-                    sys.stderr.write("Warning: Failed to set wallpaper. Your desktop environment is not supported.")
-                    sys.stderr.write("You can try manually to set Your wallpaper to %s" % file_loc)
-                return False
-            return True
-        except:
-            sys.stderr.write("ERROR: Failed to set wallpaper. There might be a bug.\n")
-            return False
-
-    def get_home_dir(self):
-        """Code copied from: https://stackoverflow.com/a/21213504."""
-        if sys.platform == "cygwin":
-            home_dir = os.getenv('HOME')
-        else:
-            home_dir = os.getenv('USERPROFILE') or os.getenv('HOME')
-        if home_dir is not None:
-            return os.path.normpath(home_dir)
-        else:
-            raise KeyError("Neither USERPROFILE or HOME environment variables set.")
 
     def init_recent_wps(self):
         self.recent_wp = {file: float("-inf") for file in self.load_wallpapers()}
@@ -280,7 +67,7 @@ class WallpaperSwitcher:
     def sort_wallpapers(self):
         try:
             loaded_wallpapers = self.load_wallpapers()
-            print(f"> Loaded: {len(loaded_wallpapers)} Wallpapers")
+            print(f"\n> Loaded: {len(loaded_wallpapers)} Wallpapers")
             wallpapers = {filepath:self.recent_wp[filepath] for filepath in loaded_wallpapers}
         except KeyError:
             #might produce endless loop
@@ -313,24 +100,36 @@ class WallpaperSwitcher:
 
         return random_wp
 
+    def favorite_wallpaper(self):
+        pass
+
     def sleep(self):
-        # only linux afaik
-        if platform.system() == "Linux":
-            while sys.stdin in select.select([sys.stdin], [], [], self.wait)[0]:                                                    
-                line = sys.stdin.readline()
-                if line:
-                    if line == "\n":
-                        return
-                else:  # an empty line means stdin has been closed
-                    print('eof')
-                    exit(0)
-        else:
-            time.sleep(self.wait)
+        print("> ", end="")  # Fake input sign
+        self.should_sleep = True
+        f1 = threading.Thread(target=self.non_blocking_input)
+        f1.start()
+
+        t1 = time.time()
+        while time.time() - t1 <= self.wait and self.should_sleep:
+            pass
+
+    def non_blocking_input(self):
+        _input = input("").lower()
+
+        if _input in ["", "skip", "next"]:
+            print("Skipping Wallpaper!")
+            self.should_sleep = False
+        elif _input == "fav":
+            pass
+            #self.favorite_wallpaper()
+        elif _input in ["quit", "exit"]:
+            print("> Exit")
+            os.kill(os.getpid(), signal.SIGINT)  # Fucking kill it
 
     def run(self):
         self.init_recent_wps()
 
-        print(f"Desktop Environment: {self.get_desktop_environment()}")
+        print(f"Desktop Environment: {wallpaper_helper.get_desktop_environment()}")
 
         while True:
             old_wallpaper = self.current_wp
@@ -350,10 +149,10 @@ class WallpaperSwitcher:
                 time.sleep(self.wait)
 
                 for image_path in itrans.transition_brightness(fps=self.fps_trans):
-                    self.set_wallpaper(image_path,False) #can safely assume set_wp works (i hope)
+                    wallpaper_helper.set_wallpaper(image_path,False) #can safely assume set_wp works (i hope)
 
             else:
-                ret = self.set_wallpaper(new_wallpaper, True)
+                ret = wallpaper_helper.set_wallpaper(new_wallpaper, True)
                 if not ret:
                     sys.stderr.write("Critical Error: Shutting down")
                     quit()
