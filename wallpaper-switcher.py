@@ -9,7 +9,7 @@ import time
 import traceback
 from collections import defaultdict
 
-import cv2
+
 import wallpaper_helper
 
 img_transition = importlib.import_module("image-transition")
@@ -93,7 +93,13 @@ class WallpaperSwitcher:
         # Due to the sorting lower values are more likely to be picked
 
         random_wp = random.choice(distributed_wps)
-        height, width, _ = cv2.imread(random_wp).shape
+
+        try:
+            import cv2
+            height, width, _ = cv2.imread(random_wp).shape
+        except ImportError:
+            height, width = None, None
+
         duplicates = sum([1 for item in distributed_wps if random_wp == item])
         chance = (duplicates / len(distributed_wps)) * 100
 
