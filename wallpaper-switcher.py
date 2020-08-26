@@ -1,32 +1,33 @@
-import os
-import threading
-from collections import defaultdict
-import random
-import time
-import importlib
 import argparse
+import importlib
+import os
+import random
 import signal
-import traceback
-import cv2
-
-
 import sys
-import select
+import threading
+import time
+import traceback
+from collections import defaultdict
 
+import cv2
 import wallpaper_helper
-                        
+
 img_transition = importlib.import_module("image-transition")
 
 
 class WallpaperSwitcher:
-
     recent_wp = defaultdict()
     current_wp = ""
     should_sleep = True
-    
-    def __init__(self, wallpaper_folder=os.path.join(os.path.expanduser("~"), "Pictures"), wait_time=120, transition=True, 
-                        fps_transition=20, quality_transition=100, num_of_images_transition=20, nsfw=False, 
-                        recursive=True, supported_images=[".png", ".jpg", ".jpeg", ".bmp", ".jpg_large", ".webp"]):
+
+    def __init__(self, wallpaper_folder=os.path.join(os.path.expanduser("~"), "Pictures"),
+                 wait_time=120, transition=True,
+                 fps_transition=20, quality_transition=100, num_of_images_transition=20, nsfw=False,
+                 recursive=True, supported_images=None):
+
+        if supported_images is None:
+            supported_images = [".png", ".jpg", ".jpeg", ".bmp", ".jpg_large", ".webp"]
+
         self.WP_FOLDER = wallpaper_folder
         self.wait = wait_time
 
@@ -50,32 +51,31 @@ class WallpaperSwitcher:
         print("Supported Images:", supported_images)
         print("-------------Settings-------------\n")
 
-
     def init_recent_wps(self):
         self.recent_wp = {file: float("-inf") for file in self.load_wallpapers()}
 
     def load_wallpapers(self):
         if self.recursive:
-            all_wallpapers = [os.path.join(dp, f) for dp, dn, fn in os.walk(self.WP_FOLDER) for f in fn 
-                        if (os.path.splitext(f)[1] in self.supported_images or not len(self.supported_images))
-                        and not (not self.nsfw and "NSFW" in dp)]
+            all_wallpapers = [os.path.join(dp, f) for dp, dn, fn in os.walk(self.WP_FOLDER) for f in fn
+                              if (os.path.splitext(f)[1] in self.supported_images or not len(self.supported_images))
+                              and not (not self.nsfw and "NSFW" in dp)]
         else:
-            all_wallpapers = {os.path.join(self.WP_FOLDER, filename) for filename in os.listdir(self.WP_FOLDER) 
-                        if (os.path.splitext(filename)[1] in self.supported_images or not len(self.supported_images))}
+            all_wallpapers = {os.path.join(self.WP_FOLDER, filename) for filename in os.listdir(self.WP_FOLDER)
+                              if (os.path.splitext(filename)[1] in self.supported_images or not len(
+                    self.supported_images))}
         return all_wallpapers
 
     def sort_wallpapers(self):
         try:
             loaded_wallpapers = self.load_wallpapers()
             print(f"\n> Loaded: {len(loaded_wallpapers)} Wallpapers")
-            wallpapers = {filepath:self.recent_wp[filepath] for filepath in loaded_wallpapers}
+            wallpapers = {filepath: self.recent_wp[filepath] for filepath in loaded_wallpapers}
         except KeyError:
-            #might produce endless loop
+            # might produce endless loop
             traceback.print_exc()
             # Occurs when a new image gets added during the execution
             self.init_recent_wps()
             return self.sort_wallpapers()
-        
 
         # Items with lower values are in the back
         # A lower value means an item which was picked more time ago => Last Item was picked the longste time ago
@@ -87,16 +87,18 @@ class WallpaperSwitcher:
 
         distributed_wps = []
         for w in wp:
-            distributed_wps.extend([w]*(wp.index(w)+1)) # Adds item to list depending on its frequency in the wallpapers
-        
+            distributed_wps.extend(
+                [w] * (wp.index(w) + 1))  # Adds item to list depending on its frequency in the wallpapers
+
         # Due to the sorting lower values are more likely to be picked
 
         random_wp = random.choice(distributed_wps)
         height, width, _ = cv2.imread(random_wp).shape
         duplicates = sum([1 for item in distributed_wps if random_wp == item])
-        chance = (duplicates/ len(distributed_wps)) * 100
+        chance = (duplicates / len(distributed_wps)) * 100
 
-        print(f"Random Wallpaper: {random_wp} [{width}x{height}] Chance: {chance:.2f}% : {duplicates} / {len(distributed_wps)}")
+        print(
+            f"Random Wallpaper: {random_wp} [{width}x{height}] Chance: {chance:.2f}% : {duplicates} / {len(distributed_wps)}")
 
         return random_wp
 
@@ -119,12 +121,14 @@ class WallpaperSwitcher:
         if _input in ["", "skip", "next"]:
             print("Skipping Wallpaper!")
             self.should_sleep = False
-        elif _input == "fav":
-            pass
-            #self.favorite_wallpaper()
+            sys.exit(1)  # Stop current thread
         elif _input in ["quit", "exit"]:
             print("> Exit")
-            os.kill(os.getpid(), signal.SIGINT)  # Fucking kill it
+            os.kill(os.getpid(), signal.SIGKILL)  # Fucking kill it
+        else:
+            print(f"command not found: {_input}\n")
+            print("> ", end="", flush=True)
+            self.non_blocking_input()
 
     def run(self):
         self.init_recent_wps()
@@ -141,15 +145,18 @@ class WallpaperSwitcher:
 
             if old_wallpaper != "" and self.transition:
                 try:
-                    itrans = img_transition.ImageTransition(input_image=old_wallpaper, output_image=new_wallpaper, temporary_dir=temp_dir, num_of_images=self.num_of_images_tran, quality=self.quality_tran)
+                    itrans = img_transition.ImageTransition(input_image=old_wallpaper, output_image=new_wallpaper,
+                                                            temporary_dir=temp_dir,
+                                                            num_of_images=self.num_of_images_tran,
+                                                            quality=self.quality_tran)
                 except IOError:
                     sys.stderr.write(f"Error loading Image: {new_wallpaper} or {old_wallpaper}")
-                    quit()#TODO: maybe some skip, need to make it properly then
+                    quit()  # TODO: maybe some skip, need to make it properly then
 
                 time.sleep(self.wait)
 
                 for image_path in itrans.transition_brightness(fps=self.fps_trans):
-                    wallpaper_helper.set_wallpaper(image_path,False) #can safely assume set_wp works (i hope)
+                    wallpaper_helper.set_wallpaper(image_path, False)  # can safely assume set_wp works (i hope)
 
             else:
                 ret = wallpaper_helper.set_wallpaper(new_wallpaper, True)
@@ -165,7 +172,7 @@ class WallpaperSwitcher:
 
 def str2bool(v):
     if isinstance(v, bool):
-       return v
+        return v
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True
     elif v.lower() in ('no', 'false', 'f', 'n', '0'):
@@ -173,24 +180,25 @@ def str2bool(v):
     else:
         return False
 
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("-f", "--wp_folder", required=True,
                     help="Folder of the Wallpapers")
 
-    ap.add_argument("-d", "--delay",default=10,type=int,
+    ap.add_argument("-d", "--delay", default=10, type=int,
                     help="Delay in seconds until wallpaper switch")
 
-    ap.add_argument("-t","--transition",type=str2bool,default=False,
+    ap.add_argument("-t", "--transition", type=str2bool, default=False,
                     help="Activates a transition between the wallpaper change")
 
-    ap.add_argument("--fps",default=20,type=int,
+    ap.add_argument("--fps", default=20, type=int,
                     help="Frames Per Second for the transition")
 
-    ap.add_argument("-q", "--quality",default=100,type=int,
+    ap.add_argument("-q", "--quality", default=100, type=int,
                     help="Quality of the transition images")
 
-    ap.add_argument("--len_transition",default=20,type=int,
+    ap.add_argument("--len_transition", default=20, type=int,
                     help="Number of images used for the transition")
 
     ap.add_argument("-nsfw", "--NSFW", default=False, type=str2bool,
@@ -199,12 +207,15 @@ if __name__ == "__main__":
     ap.add_argument("-r", "--recursive", default=True, type=str2bool,
                     help="Recursively choosing images (from all sub folders)")
 
-    ap.add_argument("-a", "--allowed_ext", default=[".png", ".jpg", ".jpeg", ".bmp", ".jpg_large", ".webp"], nargs="*", 
+    ap.add_argument("-a", "--allowed_ext", default=[".png", ".jpg", ".jpeg", ".bmp", ".jpg_large", ".webp"], nargs="*",
                     help="Allowed Image extensions specified like thia: '.png', '.jpg'.. . No/Empty means all extensions")
 
-
-
     args = vars(ap.parse_args())
-    wps = WallpaperSwitcher(wallpaper_folder=args["wp_folder"], wait_time=args["delay"], transition=args["transition"], fps_transition=args["fps"], 
-    quality_transition=args["quality"], num_of_images_transition=args["len_transition"], nsfw=args["NSFW"], recursive = args["recursive"], supported_images = args["allowed_ext"])
-    wps.run()
+    wps = WallpaperSwitcher(wallpaper_folder=args["wp_folder"], wait_time=args["delay"], transition=args["transition"],
+                            fps_transition=args["fps"],
+                            quality_transition=args["quality"], num_of_images_transition=args["len_transition"],
+                            nsfw=args["NSFW"], recursive=args["recursive"], supported_images=args["allowed_ext"])
+    try:
+        wps.run()
+    except KeyboardInterrupt:
+        sys.exit()
