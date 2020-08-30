@@ -99,6 +99,9 @@ class WallpaperSwitcher:
             height, width, _ = cv2.imread(random_wp).shape
         except ImportError:
             height, width = None, None
+        except AttributeError:
+            print(f"Could not load image: {random_wp}.")
+            raise AttributeError
 
         duplicates = sum([1 for item in distributed_wps if random_wp == item])
         chance = (duplicates / len(distributed_wps)) * 100
@@ -130,7 +133,7 @@ class WallpaperSwitcher:
             sys.exit(1)  # Stop current thread
         elif _input in ["quit", "exit"]:
             print("> Exit")
-            os.kill(os.getpid(), signal.SIGKILL)  # Fucking kill it
+            os.kill(os.getpid(), signal.SIGTERM)  # Fucking kill it
         else:
             print(f"command not found: {_input}\n")
             print("> ", end="", flush=True)
@@ -143,7 +146,10 @@ class WallpaperSwitcher:
 
         while True:
             old_wallpaper = self.current_wp
-            new_wallpaper = self.choose_wallpaper()
+            try:
+                new_wallpaper = self.choose_wallpaper()
+            except AttributeError:
+                continue
 
             temp_dir = os.path.join(os.path.expanduser("~"), "temp_img")
             if not os.path.exists(temp_dir):
