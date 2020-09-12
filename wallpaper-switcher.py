@@ -6,13 +6,14 @@ import signal
 import sys
 import threading
 import time
-import traceback
 from collections import defaultdict
-
+import json
 
 import wallpaper_helper
 
 img_transition = importlib.import_module("image-transition")
+
+# TODO: add blur option
 
 
 class WallpaperSwitcher:
@@ -51,8 +52,23 @@ class WallpaperSwitcher:
         print("Supported Images:", supported_images)
         print("-------------Settings-------------\n")
 
+    def load_history(self):
+        print("> Loading wallpaper history")
+        with open(".wallpaper-history.json", "r") as f:
+            data = f.read()
+
+        return json.loads(data)
+
+    def save_history(self):
+        with open(".wallpaper-history.json", "w") as f:
+            f.write(json.dumps(self.recent_wp, indent=4))
+        print("Saved wallpaper history")
+
     def init_recent_wps(self):
-        self.recent_wp = {file: float("-inf") for file in self.load_wallpapers()}
+        if os.path.exists(".wallpaper-history.json"):
+            self.recent_wp = self.load_history()
+        else:
+            self.recent_wp = {file: float("-inf") for file in self.load_wallpapers()}
 
     def load_wallpapers(self):
         if self.recursive:
@@ -61,24 +77,23 @@ class WallpaperSwitcher:
                               and not (not self.nsfw and "NSFW" in dp)]
         else:
             all_wallpapers = {os.path.join(self.WP_FOLDER, filename) for filename in os.listdir(self.WP_FOLDER)
-                              if (os.path.splitext(filename)[1] in self.supported_images or not len(
-                    self.supported_images))}
+                              if (os.path.splitext(filename)[1] in self.supported_images or
+                                  not len(self.supported_images))}
         return all_wallpapers
 
     def sort_wallpapers(self):
-        try:
-            loaded_wallpapers = self.load_wallpapers()
-            print(f"\n> Loaded: {len(loaded_wallpapers)} Wallpapers")
-            wallpapers = {filepath: self.recent_wp[filepath] for filepath in loaded_wallpapers}
-        except KeyError:
-            # might produce endless loop
-            traceback.print_exc()
-            # Occurs when a new image gets added during the execution
-            self.init_recent_wps()
-            return self.sort_wallpapers()
+        loaded_wallpapers = self.load_wallpapers()
+        print(f"\n> Loaded: {len(loaded_wallpapers)} Wallpapers")
+        wallpapers = {}
 
+        for filepath in loaded_wallpapers:
+            if filepath not in self.recent_wp:
+                self.recent_wp[filepath] = time.time()  # New wallpaper
+            wallpapers[filepath] = self.recent_wp[filepath]
+
+        #print(json.dumps(sorted(wallpapers.items(), key=lambda kv: kv[1], reverse=True), indent=4))
         # Items with lower values are in the back
-        # A lower value means an item which was picked more time ago => Last Item was picked the longste time ago
+        # A lower value means an item which was picked more time ago => Last Item was picked the longest time ago
         wallpapers = [x[0] for x in sorted(wallpapers.items(), key=lambda kv: kv[1], reverse=True)]
         return wallpapers
 
@@ -88,8 +103,9 @@ class WallpaperSwitcher:
         distributed_wps = []
         for w in wp:
             distributed_wps.extend(
-                [w] * (wp.index(w) + 1))  # Adds item to list depending on its frequency in the wallpapers
+                [w] * (wp.index(w) + 1)*2)
 
+        # Item occurrence is calculated by its index => Higher Index => Higher Occurrence in the list => More likey to be picked
         # Due to the sorting lower values are more likely to be picked
 
         random_wp = random.choice(distributed_wps)
@@ -130,6 +146,7 @@ class WallpaperSwitcher:
             sys.exit(1)  # Stop current thread
         elif _input in ["quit", "exit"]:
             print("> Exit")
+            self.save_history()
             os.kill(os.getpid(), signal.SIGKILL)  # Fucking kill it
         else:
             print(f"command not found: {_input}\n")
@@ -168,6 +185,7 @@ class WallpaperSwitcher:
                 ret = wallpaper_helper.set_wallpaper(new_wallpaper, True)
                 if not ret:
                     sys.stderr.write("Critical Error: Shutting down")
+                    self.save_history()
                     quit()
 
                 self.sleep()
@@ -224,4 +242,5 @@ if __name__ == "__main__":
     try:
         wps.run()
     except KeyboardInterrupt:
+        wps.save_history()
         sys.exit()
