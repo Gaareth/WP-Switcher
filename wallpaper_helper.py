@@ -194,6 +194,7 @@ def set_wallpaper(file_loc, first_run):
                 END"""
                 subprocess.Popen(SCRIPT % file_loc, shell=True)
         elif desktop_env in ["windows"]:
+            import ctypes
             ctypes.windll.user32.SystemParametersInfoW(20, 0, file_loc, 0)
         else:
             if first_run:  # don't spam the user with the same message over and over again
@@ -201,8 +202,8 @@ def set_wallpaper(file_loc, first_run):
                 sys.stderr.write("You can try manually to set Your wallpaper to %s" % file_loc)
             return False
         return True
-    except:
-        sys.stderr.write("ERROR: Failed to set wallpaper. There might be a bug.\n")
+    except Exception as e:
+        sys.stderr.write("ERROR: Failed to set wallpaper. There might be a bug.\n" + e)
         return False
 
 
