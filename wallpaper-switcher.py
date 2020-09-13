@@ -149,12 +149,8 @@ class WallpaperSwitcher:
             sys.exit(1)  # Stop current thread
         elif _input in ["quit", "exit"]:
             print("> Exit")
-<<<<<<< HEAD
             self.save_history()
             os.kill(os.getpid(), signal.SIGKILL)  # Fucking kill it
-=======
-            os.kill(os.getpid(), signal.SIGTERM)  # Fucking kill it
->>>>>>> c526e22b83d933c23df238cd8c597c77057e56aa
         else:
             print(f"command not found: {_input}\n")
             print("> ", end="", flush=True)
