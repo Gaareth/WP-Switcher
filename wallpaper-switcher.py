@@ -8,6 +8,7 @@ import threading
 import time
 from collections import defaultdict
 import json
+import ntpath
 
 import wallpaper_helper
 
@@ -39,6 +40,8 @@ class WallpaperSwitcher:
         self.nsfw = nsfw
         self.recursive = recursive
         self.supported_images = supported_images
+
+        self.blur = False
 
         print("-------------Settings-------------")
         print("Wallpaper folder:", wallpaper_folder)
@@ -103,7 +106,7 @@ class WallpaperSwitcher:
         distributed_wps = []
         for w in wp:
             distributed_wps.extend(
-                [w] * (wp.index(w) + 1)*2)
+                [w] * (wp.index(w) + 1))
 
         # Item occurrence is calculated by its index => Higher Index => Higher Occurrence in the list => More likey to be picked
         # Due to the sorting lower values are more likely to be picked
@@ -138,7 +141,7 @@ class WallpaperSwitcher:
 
         t1 = time.time()
         while time.time() - t1 <= self.wait and self.should_sleep:
-            pass
+            time.sleep(1)
 
     def non_blocking_input(self):
         _input = input("").lower()
@@ -172,6 +175,15 @@ class WallpaperSwitcher:
             if not os.path.exists(temp_dir):
                 os.mkdir(temp_dir)
 
+            if self.blur:
+                try:
+                    import cv2
+                    img = cv2.imread(new_wallpaper)
+                    img = cv2.GaussianBlur(img, (17, 17), cv2.BORDER_DEFAULT)
+                    new_wallpaper = os.path.join(temp_dir, "blur_"+ntpath.split(new_wallpaper)[1])
+                    cv2.imwrite(new_wallpaper, img)
+                except ImportError:
+                    pass
             if old_wallpaper != "" and self.transition:
                 try:
                     itrans = img_transition.ImageTransition(input_image=old_wallpaper, output_image=new_wallpaper,
@@ -182,7 +194,7 @@ class WallpaperSwitcher:
                     sys.stderr.write(f"Error loading Image: {new_wallpaper} or {old_wallpaper}")
                     quit()  # TODO: maybe some skip, need to make it properly then
 
-                time.sleep(self.wait)
+                self.sleep()
 
                 for image_path in itrans.transition_brightness(fps=self.fps_trans):
                     wallpaper_helper.set_wallpaper(image_path, False)  # can safely assume set_wp works (i hope)
