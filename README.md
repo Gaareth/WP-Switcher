@@ -1,5 +1,5 @@
 # WP-Switcher
-Crossplattform Wallpaper Switcher including a transition
+Crossplatform Wallpaper Switcher
 
 ## Installation
 
