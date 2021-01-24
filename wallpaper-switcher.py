@@ -87,6 +87,12 @@ class WallpaperSwitcher:
     def sort_wallpapers(self):
         loaded_wallpapers = self.load_wallpapers()
         print(f"\n> Loaded: {len(loaded_wallpapers)} Wallpapers")
+        if len(loaded_wallpapers) <= 0:
+            print("No Wallpapers found! Make sure that -recursive is enabled "
+                  "or add more images to the selected directory.",
+                  file=sys.stderr)
+            sys.exit()
+
         wallpapers = {}
 
         for filepath in loaded_wallpapers:
